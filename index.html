@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>KaiqueBet - A Casa de Apostas da Resenha</title>
+  
+  <!-- PWA & Mobile Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="KaiqueBet">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- MODAL DE LOGIN (SEM SENHA - NOME & GMAIL) -->
+  <div class="auth-overlay hidden" id="authModal">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="brand-logo-large">
+          <svg class="brand-shield" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M50 5L90 20V50C90 75 50 95 50 95C50 95 10 75 10 50V20L50 5Z" fill="url(#shieldGrad)" stroke="#10b981" stroke-width="3"/>
+            <path d="M30 32H40V68H30V32Z" fill="#f59e0b"/>
+            <path d="M40 50L65 32H75L52 50L75 68H65L40 50Z" fill="#10b981"/>
+            <defs>
+              <linearGradient id="shieldGrad" x1="10" y1="5" x2="90" y2="95" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#0f172a"/>
+                <stop offset="1" stop-color="#020617"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div class="brand-text">
+            <h2>KAIQUE<span>BET</span></h2>
+            <span class="brand-tag">OFICIAL DA RESENHA</span>
+          </div>
+        </div>
+        <p class="auth-subtitle">Acesse sua conta para apostar KaiqueCoins sem risco real.</p>
+      </div>
+
+      <form class="auth-form" id="authForm" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group">
+          <label for="loginName">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+            Nome ou Apelido
+          </label>
+          <input type="text" id="loginName" placeholder="Ex: Maurício dos Cria" required autocomplete="name">
+        </div>
+
+        <div class="form-group">
+          <label for="loginEmail">
+            <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            Gmail
+          </label>
+          <input type="email" id="loginEmail" placeholder="seunome@gmail.com" required autocomplete="email">
+          <span class="input-hint">Insira seu e-mail do Gmail para identificar seu perfil.</span>
+        </div>
+
+        <button type="submit" class="btn-primary-auth">
+          <span>Acessar Plataforma</span>
+          <svg class="btn-arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </button>
+      </form>
+
+      <div class="auth-footer-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="16" height="16">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span>Sem necessidade de senha. Seus palpites e saldo ficam salvos no seu navegador.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="nav-container">
+      <div class="logo-area">
+        <div class="brand-logo-nav">
+          <svg class="brand-shield-small" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M50 5L90 20V50C90 75 50 95 50 95C50 95 10 75 10 50V20L50 5Z" fill="url(#shieldGradNav)" stroke="#10b981" stroke-width="4"/>
+            <path d="M30 32H40V68H30V32Z" fill="#f59e0b"/>
+            <path d="M40 50L65 32H75L52 50L75 68H65L40 50Z" fill="#10b981"/>
+            <defs>
+              <linearGradient id="shieldGradNav" x1="10" y1="5" x2="90" y2="95" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#1e293b"/>
+                <stop offset="1" stop-color="#090d16"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <div>
+            <h1 class="logo-title">KAIQUE<span>BET</span></h1>
+            <p class="logo-subtitle">Apostas Fictícias &bull; 0% Dinheiro Real</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="user-stats">
+        <!-- Badge de Administrador da Banca -->
+        <div class="admin-badge-top hidden" id="adminBadgeTop">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5" width="16" height="16">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+          </svg>
+          <span>ADM DA BANCA</span>
+          <button class="btn-exit-adm" id="btnExitAdm" title="Sair do Modo ADM">✕</button>
+        </div>
+
+        <button class="btn-toggle-adm" id="btnOpenAdmModal" title="Painel / Acesso de Administrador">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <span>Acesso ADM</span>
+        </button>
+
+        <!-- Perfil do Usuário Logado -->
+        <div class="user-profile-card" id="userProfileCard">
+          <div class="user-avatar" id="userAvatar">K</div>
+          <div class="user-info">
+            <span class="user-name" id="userNameDisplay">Apostador</span>
+            <span class="user-email" id="userEmailDisplay">usuario@gmail.com</span>
+          </div>
+          <button class="btn-logout" id="btnLogout" title="Sair / Trocar de Conta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </button>
+        </div>
+
+        <button class="btn-install hidden" id="btnInstallApp" title="Instalar Aplicativo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+            <line x1="12" y1="18" x2="12.01" y2="18"></line>
+          </svg>
+          <span>Instalar App</span>
+        </button>
+
+        <div class="wallet-badge">
+          <div class="wallet-icon-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="18" height="18">
+              <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M6 12h.01M18 12h.01"></path>
+            </svg>
+          </div>
+          <div class="wallet-details">
+            <span class="wallet-label">Saldo</span>
+            <span class="wallet-amount" id="balanceDisplay">KC$ 1.000</span>
+          </div>
+          <button class="btn-deposit" id="btnDepositModal" title="Pedir mais fichas fictícias">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Recarregar</span>
+          </button>
+        </div>
+
+        <button class="sound-toggle" id="soundToggle" title="Ativar/Desativar Sons">
+          <svg class="sound-icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <svg class="sound-icon-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Banner Informativo -->
+  <div class="disclaimer-bar">
+    <div class="disclaimer-content">
+      <svg class="disclaimer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+      <span>Plataforma recreativa sem valor monetário real. As moedas <strong>KaiqueCoins (KC$)</strong> são exclusivas para diversão entre amigos.</span>
+    </div>
+  </div>
+
+  <main class="main-content">
+    <!-- Navegação de Abas -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="resenha">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+          <path d="M2 12h20"></path>
+        </svg>
+        <span>Apostas da Resenha</span>
+      </button>
+
+      <button class="tab-btn" data-tab="foguetinho">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path>
+          <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-2.05 9a22 22 0 0 1-3.95 2l-3-3z"></path>
+          <path d="M9 12l2 2"></path>
+        </svg>
+        <span>Foguetinho Crash</span>
+      </button>
+
+      <button class="tab-btn" data-tab="tigrinho">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+          <line x1="7" y1="8" x2="7.01" y2="8"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          <line x1="17" y1="8" x2="17.01" y2="8"></line>
+        </svg>
+        <span>Tigrinho do Kaique</span>
+      </button>
+
+      <button class="tab-btn" data-tab="historico">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <polyline points="12 8 12 12 14 14"></polyline>
+          <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"></path>
+        </svg>
+        <span>Minhas Apostas (<span id="historyCount">0</span>)</span>
+      </button>
+    </nav>
+
+    <div class="layout-grid">
+      <!-- Painel Principal de Jogos / Apostas -->
+      <section class="game-container">
+
+        <!-- ABA 1: APOSTAS DA RESENHA -->
+        <div class="tab-content active" id="tab-resenha">
+          <!-- Barra Exclusiva de Ações do Administrador -->
+          <div class="admin-control-bar hidden" id="adminControlBar">
+            <div class="admin-control-info">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="20" height="20">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+              </svg>
+              <div>
+                <strong>Painel do Administrador (Maurício ADM)</strong>
+                <span>Você tem permissão para adicionar novas apostas, editar cotações e apagar eventos.</span>
+              </div>
+            </div>
+            <button class="btn-create-bet" id="btnOpenCreateBetModal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>+ Criar Nova Aposta</span>
+            </button>
+          </div>
+
+          <div class="section-header">
+            <div>
+              <h2>Apostas em Destaque</h2>
+              <p>Palpites oficiais da roda de amigos. Escolha uma cotação e confirme no bilhete.</p>
+            </div>
+            <button class="btn-secondary" id="btnResetAllBets">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+              <span>Recalcular Odds</span>
+            </button>
+          </div>
+
+          <div class="bets-list" id="betsList">
+            <!-- Gerado via JavaScript -->
+          </div>
+
+          <!-- WIDGET DE COMENTÁRIOS DA RESENHA (CANTO INFERIOR DIREITO) -->
+          <div class="comments-widget-container" id="commentsWidgetContainer">
+            <!-- Botão Flutuante para Abrir/Fechar -->
+            <button class="btn-toggle-comments" id="btnToggleComments" title="Abrir Mural de Comentários">
+              <div class="comments-btn-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span class="comments-unread-dot" id="commentsUnreadDot"></span>
+              </div>
+              <span class="comments-btn-text">Mural da Resenha (<strong id="commentsCountBadge">3</strong>)</span>
+            </button>
+
+            <!-- Janela do Mural de Comentários -->
+            <div class="comments-box hidden" id="commentsBox">
+              <div class="comments-box-header">
+                <div class="comments-header-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="18" height="18">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <div>
+                    <h4>Mural da Resenha</h4>
+                    <span class="comments-header-sub">Comentários dos apostadores</span>
+                  </div>
+                </div>
+                <button class="btn-close-comments" id="btnCloseComments" title="Minimizar">✕</button>
+              </div>
+
+              <!-- Lista de Mensagens / Comentários -->
+              <div class="comments-messages-list" id="commentsMessagesList">
+                <!-- Renderizado via JavaScript (Apenas Nome, SEM Gmail) -->
+              </div>
+
+              <!-- Formulário de Envio -->
+              <form class="comments-form" id="commentsForm" onsubmit="handleSendComment(event)">
+                <div class="comments-user-preview" id="commentsUserPreview">
+                  Comentando como: <strong id="commentingAsName">Apostador</strong>
+                </div>
+                <div class="comments-input-row">
+                  <input type="text" id="commentTextInput" placeholder="Mande a resenha sobre as apostas..." required maxlength="200" autocomplete="off">
+                  <button type="submit" class="btn-send-comment" title="Enviar Comentário">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 2: FOGUETINHO CRASH -->
+        <div class="tab-content" id="tab-foguetinho">
+          <div class="section-header">
+            <div>
+              <h2>Foguetinho Multiplicador (Crash)</h2>
+              <p>O multiplicador sobe a cada milissegundo. Encerre sua aposta antes da explosão!</p>
+            </div>
+          </div>
+
+          <div class="crash-card">
+            <div class="crash-display" id="crashDisplay">
+              <div class="crash-sky" id="crashSky">
+                <div class="stars"></div>
+                <div class="rocket" id="rocketIcon">
+                  <svg class="rocket-svg" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Foguete Vetorial Premium -->
+                    <path d="M32 4C32 4 44 14 44 34L32 42L20 34C20 14 32 4 32 4Z" fill="url(#rocketBodyGrad)"/>
+                    <path d="M32 4C32 4 44 14 44 34H20C20 14 32 4 32 4Z" stroke="#38bdf8" stroke-width="1.5"/>
+                    <!-- Asas -->
+                    <path d="M20 28L12 40V44L20 38V28Z" fill="#10b981"/>
+                    <path d="M44 28L52 40V44L44 38V28Z" fill="#10b981"/>
+                    <!-- Janela -->
+                    <circle cx="32" cy="20" r="5" fill="#0284c7" stroke="#e0f2fe" stroke-width="1.5"/>
+                    <circle cx="30.5" cy="18.5" r="1.5" fill="#ffffff"/>
+                    <!-- Propulsor -->
+                    <path d="M26 42H38L35 46H29L26 42Z" fill="#64748b"/>
+                    <!-- Chamas de Propulsão -->
+                    <path class="rocket-flame" d="M28 46L32 58L36 46H28Z" fill="url(#flameGrad)"/>
+                    <defs>
+                      <linearGradient id="rocketBodyGrad" x1="20" y1="4" x2="44" y2="42" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#f8fafc"/>
+                        <stop offset="1" stop-color="#cbd5e1"/>
+                      </linearGradient>
+                      <linearGradient id="flameGrad" x1="32" y1="46" x2="32" y2="58" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#f59e0b"/>
+                        <stop offset="1" stop-color="#ef4444"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </div>
+              </div>
+              <div class="crash-multiplier" id="crashMultiplier">1.00x</div>
+              <div class="crash-status" id="crashStatus">Faça sua aposta para decolar!</div>
+            </div>
+
+            <div class="crash-controls">
+              <div class="input-group">
+                <label for="crashBetInput">Valor da Aposta (KC$):</label>
+                <div class="input-with-quick">
+                  <input type="number" id="crashBetInput" min="10" value="50" step="10">
+                  <button class="btn-chip" onclick="setCrashBet(50)">50</button>
+                  <button class="btn-chip" onclick="setCrashBet(100)">100</button>
+                  <button class="btn-chip" onclick="setCrashBet(250)">250</button>
+                  <button class="btn-chip" onclick="setCrashBet('half')">½</button>
+                  <button class="btn-chip" onclick="setCrashBet('max')">Tudo</button>
+                </div>
+              </div>
+
+              <div class="action-buttons">
+                <button class="btn-action btn-play" id="btnCrashPlay">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                  </svg>
+                  <span>Iniciar Decolagem</span>
+                </button>
+                <button class="btn-action btn-cashout" id="btnCrashCashout" disabled>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                    <path d="M7 15h0M2 9.5h20"></path>
+                  </svg>
+                  <span>Encerrar Aposta (<strong id="potentialCrashCashout">KC$ 0</strong>)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 3: TIGRINHO DO KAIQUE (SLOT) -->
+        <div class="tab-content" id="tab-tigrinho">
+          <div class="section-header">
+            <div>
+              <h2>Tigrinho Oficial do Kaique</h2>
+              <p>Gire a máquina de caça-níqueis da resenha. 3 símbolos iguais pagam prêmio máximo.</p>
+            </div>
+          </div>
+
+          <div class="slot-machine-card">
+            <div class="slot-screen">
+              <div class="slot-reel" id="reel1">
+                <div class="slot-item" data-symbol="tiger"></div>
+              </div>
+              <div class="slot-reel" id="reel2">
+                <div class="slot-item" data-symbol="tiger"></div>
+              </div>
+              <div class="slot-reel" id="reel3">
+                <div class="slot-item" data-symbol="tiger"></div>
+              </div>
+            </div>
+
+            <div class="slot-result-message" id="slotResultMessage">
+              Acione a roleta para testar sua sorte!
+            </div>
+
+            <div class="slot-controls">
+              <div class="input-group">
+                <label for="slotBetInput">Valor do Giro (KC$):</label>
+                <div class="input-with-quick">
+                  <input type="number" id="slotBetInput" min="10" value="20" step="10">
+                  <button class="btn-chip" onclick="setSlotBet(20)">20</button>
+                  <button class="btn-chip" onclick="setSlotBet(50)">50</button>
+                  <button class="btn-chip" onclick="setSlotBet(100)">100</button>
+                  <button class="btn-chip" onclick="setSlotBet(500)">500</button>
+                </div>
+              </div>
+
+              <button class="btn-action btn-gold" id="btnSpinSlot">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                </svg>
+                <span>GIRAR ROLETA</span>
+              </button>
+
+              <div class="payout-table">
+                <h4>Tabela Oficial de Pagamentos:</h4>
+                <div class="payout-grid">
+                  <div class="payout-item">
+                    <span class="payout-label">Coroa Real (3x)</span>
+                    <strong class="payout-val">20x</strong>
+                  </div>
+                  <div class="payout-item">
+                    <span class="payout-label">Tigre Lendário (3x)</span>
+                    <strong class="payout-val">15x</strong>
+                  </div>
+                  <div class="payout-item">
+                    <span class="payout-label">Pizza Premium (3x)</span>
+                    <strong class="payout-val">10x</strong>
+                  </div>
+                  <div class="payout-item">
+                    <span class="payout-label">Litrão Gelado (3x)</span>
+                    <strong class="payout-val">8x</strong>
+                  </div>
+                  <div class="payout-item">
+                    <span class="payout-label">Uno com Escada (3x)</span>
+                    <strong class="payout-val">5x</strong>
+                  </div>
+                  <div class="payout-item">
+                    <span class="payout-label">Qualquer Par Duplo</span>
+                    <strong class="payout-val">1.5x</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 4: HISTÓRICO -->
+        <div class="tab-content" id="tab-historico">
+          <div class="section-header">
+            <div>
+              <h2>Extrato de Apostas</h2>
+              <p>Histórico detalhado das suas jogadas e balanços de rodadas.</p>
+            </div>
+            <button class="btn-secondary" id="btnClearHistory">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              <span>Limpar Histórico</span>
+            </button>
+          </div>
+
+          <div class="history-list" id="historyList">
+            <!-- Preenchido via JS -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Sidebar: Bilhete de Aposta (Bet Slip) -->
+      <aside class="betslip-card" id="betslipCard">
+        <div class="betslip-header">
+          <div class="betslip-title-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="18" height="18">
+              <path d="M4 4h16v16H4z"></path>
+              <path d="M4 9h16M4 15h16M9 4v16"></path>
+            </svg>
+            <h3>Bilhete de Aposta</h3>
+          </div>
+          <span class="badge-status" id="betSlipBadge">Vazio</span>
+        </div>
+
+        <div class="betslip-body" id="betslipBody">
+          <div class="empty-slip" id="emptySlipNotice">
+            <div class="slip-icon-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="40" height="40">
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="6"></circle>
+                <circle cx="12" cy="12" r="2"></circle>
+              </svg>
+            </div>
+            <p>Selecione uma cotação na aba <strong>Apostas da Resenha</strong> para montar seu palpite.</p>
+          </div>
+
+          <div class="active-slip hidden" id="activeSlipContent">
+            <div class="slip-match" id="slipMatchTitle">Evento</div>
+            <div class="slip-selection" id="slipSelectionName">Seleção</div>
+            <div class="slip-odd-box">
+              <span>Cotação da Banca:</span>
+              <strong id="slipOddValue">1.00</strong>
+            </div>
+
+            <div class="slip-input-box">
+              <label for="slipBetAmount">Valor do Palpite (KC$):</label>
+              <div class="slip-input-row">
+                <span>KC$</span>
+                <input type="number" id="slipBetAmount" value="50" min="5" step="5">
+              </div>
+            </div>
+
+            <div class="quick-amounts">
+              <button onclick="setSlipBet(20)">+20</button>
+              <button onclick="setSlipBet(50)">+50</button>
+              <button onclick="setSlipBet(100)">+100</button>
+              <button onclick="setSlipBet('all')">Tudo</button>
+            </div>
+
+            <div class="slip-summary">
+              <div>Retorno Potencial:</div>
+              <div class="potential-payout" id="slipPotentialWin">KC$ 0</div>
+            </div>
+
+            <button class="btn-confirm-bet" id="btnConfirmSlipBet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>Confirmar Aposta</span>
+            </button>
+            <button class="btn-cancel-slip" id="btnCancelSlip">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- MODAL DE RECARGA / BANCO KAIQUE -->
+  <div class="modal-overlay hidden" id="depositModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="22" height="22">
+            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+          </svg>
+          <h3>Banco Kaique S/A - Crédito Fictício</h3>
+        </div>
+        <button class="modal-close" id="btnCloseDeposit">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Seu saldo de KaiqueCoins acabou? Solicite recargas fictícias instantâneas sem juros e sem consulta a órgãos de crédito.</p>
+        
+        <div class="deposit-options">
+          <button class="deposit-card" onclick="claimDeposit(500, 'Pix Solidário do Kaique')">
+            <div class="deposit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="24" height="24">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </div>
+            <div>
+              <strong>+ 500 KaiqueCoins</strong>
+              <span>Ajuda de custo básica para manter o jogo</span>
+            </div>
+          </button>
+
+          <button class="deposit-card" onclick="claimDeposit(1500, 'Vale Refeição Antecipado')">
+            <div class="deposit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" width="24" height="24">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                <line x1="1" y1="10" x2="23" y2="10"></line>
+              </svg>
+            </div>
+            <div>
+              <strong>+ 1.500 KaiqueCoins</strong>
+              <span>Adiantamento do VR para emergências da resenha</span>
+            </div>
+          </button>
+
+          <button class="deposit-card" onclick="claimDeposit(5000, 'Aporte de Patrocinador')">
+            <div class="deposit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="24" height="24">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"></path>
+                <line x1="12" y1="18" x2="12" y2="20"></line>
+                <line x1="12" y1="4" x2="12" y2="6"></line>
+              </svg>
+            </div>
+            <div>
+              <strong>+ 5.000 KaiqueCoins</strong>
+              <span>Banca robusta para apostar com agressividade</span>
+            </div>
+          </button>
+
+          <button class="deposit-card reset-card" onclick="resetToInitial()">
+            <div class="deposit-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" width="24" height="24">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+            </div>
+            <div>
+              <strong>Redefinir Padrão de Fábrica</strong>
+              <span>Restaurar saldo inicial de 1.000 KC$</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE ACESSO ADM (PIN) -->
+  <div class="modal-overlay hidden" id="admPinModal">
+    <div class="modal-box modal-box-small">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="20" height="20">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          <h3>Autenticação de Administrador</h3>
+        </div>
+        <button class="modal-close" id="btnCloseAdmPin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Digite a chave secreta de Administrador para gerenciar as apostas da resenha (criar, editar e apagar).</p>
+        <form onsubmit="handleAdmPinSubmit(event)">
+          <div class="form-group">
+            <label for="admPinInput">Chave de Administrador:</label>
+            <input type="password" id="admPinInput" placeholder="Digite a chave (Padrão: 1234)" required autocomplete="current-password">
+            <span class="input-hint">Chave de acesso: <strong>1234</strong></span>
+          </div>
+          <button type="submit" class="btn-primary-auth" style="margin-top: 1rem; width: 100%;">
+            <span>Liberar Painel ADM</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DO EDITOR DE APOSTAS (CRIAR / EDITAR) -->
+  <div class="modal-overlay hidden" id="betEditorModal">
+    <div class="modal-box modal-box-large">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" width="20" height="20">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          <h3 id="betEditorModalTitle">Criar Nova Aposta da Resenha</h3>
+        </div>
+        <button class="modal-close" id="btnCloseBetEditor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form class="modal-body" id="betEditorForm" onsubmit="handleSaveBetEditor(event)">
+        <input type="hidden" id="editorBetId" value="">
+
+        <div class="form-group">
+          <label for="editorQuestion">Pergunta / Evento da Aposta:</label>
+          <input type="text" id="editorQuestion" placeholder="Ex: Kaique vai pagar o rodízio hoje?" required>
+        </div>
+
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="editorCategory">Categoria / Tag:</label>
+            <input type="text" id="editorCategory" placeholder="Ex: Churrasco, Pelada, Zoeira" required>
+          </div>
+          <div class="form-group">
+            <label for="editorHotCheckbox" style="margin-top: 1.8rem; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="editorHotCheckbox" style="width: 18px; height: 18px; cursor: pointer;">
+              <span>Destacar como "Super Aposta"</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="editorDescription">Descrição dos Fatos / Resenha:</label>
+          <input type="text" id="editorDescription" placeholder="Detalhes do evento para informar os apostadores" required>
+        </div>
+
+        <!-- Seção Dinâmica de Opções -->
+        <div class="options-editor-section">
+          <div class="options-editor-header">
+            <h4>Opções de Palpite & Cotações (Odds):</h4>
+            <button type="button" class="btn-add-option" onclick="addEditorOptionRow()">
+              + Adicionar Opção
+            </button>
+          </div>
+          <div class="options-editor-list" id="editorOptionsList">
+            <!-- Linhas geradas dinamicamente -->
+          </div>
+        </div>
+
+        <div class="modal-actions-bar">
+          <button type="button" class="btn-secondary" id="btnCancelBetEditor">Cancelar</button>
+          <button type="submit" class="btn-primary-auth" style="margin-top: 0;">Salvar Aposta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE FINALIZAR & DEFINIR RESULTADO (EXCLUSIVO ADM) -->
+  <div class="modal-overlay hidden" id="settleBetModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" width="20" height="20">
+            <circle cx="12" cy="8" r="7"></circle>
+            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+          </svg>
+          <h3>Finalizar Evento e Pagar Ganhadores</h3>
+        </div>
+        <button class="modal-close" id="btnCloseSettleModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Selecione a opção que <strong>realmente aconteceu na vida real</strong>. O sistema pagará instantaneamente todos os apostadores que escolheram esta opção!</p>
+        <h4 id="settleBetQuestion" style="color: #fff; margin-bottom: 1rem;">Pergunta do Evento</h4>
+        <div class="settle-options-list" id="settleOptionsList">
+          <!-- Gerado dinamicamente -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMAÇÃO ESTILIZADO (SUBSTITUI OS ALERTS/CONFIRMS NATIVOS) -->
+  <div class="modal-overlay hidden" id="customConfirmModal">
+    <div class="modal-box modal-box-confirm">
+      <div class="confirm-icon-box" id="confirmIconBox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <h3 class="confirm-title" id="customConfirmTitle">Confirmar Ação</h3>
+      <p class="confirm-message" id="customConfirmMessage">Tem certeza que deseja continuar?</p>
+      
+      <div class="confirm-buttons-row">
+        <button type="button" class="btn-confirm-cancel" id="btnCustomConfirmCancel">Cancelar</button>
+        <button type="button" class="btn-confirm-action" id="btnCustomConfirmAction">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-brand">
+      <span class="footer-logo">KAIQUE<span>BET</span></span>
+      <p>Desenvolvido para entretenimento entre amigos.</p>
+    </div>
+    <p class="footer-small">Sem apostas em moeda corrente. Sem transações financeiras. Divirta-se com responsabilidade.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

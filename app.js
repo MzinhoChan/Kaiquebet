@@ -268,18 +268,271 @@ function closeCustomConfirm() {
   customConfirmCallback = null;
 }
 
-// --- DADOS DO MURAL DE COMENTÁRIOS DA RESENHA (SEM BOTS - APENAS PESSOAS REAIS) ---
+// --- DADOS DO MURAL DE COMENTÁRIOS DA RESENHA & REALTIME MQTT ---
 const DEFAULT_COMMENTS = [];
 
 let savedComments = null;
 try {
   savedComments = JSON.parse(localStorage.getItem(STORAGE_KEYS.COMMENTS));
 } catch(e) {}
-// Filtra para remover quaisquer bots antigos previamente salvos
 let commentsData = Array.isArray(savedComments) ? savedComments.filter(c => !['c1', 'c2', 'c3'].includes(c.id)) : [];
 
 function saveCommentsData() {
   localStorage.setItem(STORAGE_KEYS.COMMENTS, JSON.stringify(commentsData));
+}
+
+// --- CONFIGURAÇÃO MQTT PARA SINCRONIZAÇÃO EM TEMPO REAL ---
+const MQTT_CONFIG = {
+  brokerUrl: 'wss://broker.emqx.io:8084/mqtt',
+  topics: {
+    messages: 'kaiquebet/chat/messages',
+    presence: 'kaiquebet/chat/presence',
+    delete: 'kaiquebet/chat/delete'
+  }
+};
+
+let mqttClient = null;
+const onlineClientsMap = new Map();
+const CLIENT_ID = `kb_${Math.random().toString(36).substring(2, 9)}`;
+
+function initRealtimeOnline() {
+  if (typeof mqtt === 'undefined') {
+    console.warn("MQTT.js não carregado ainda");
+    return;
+  }
+
+  try {
+    mqttClient = mqtt.connect(MQTT_CONFIG.brokerUrl, {
+      clientId: CLIENT_ID,
+      clean: true,
+      connectTimeout: 5000,
+      reconnectPeriod: 3000
+    });
+
+    mqttClient.on('connect', () => {
+      console.log("MQTT Conectado com sucesso!");
+      mqttClient.subscribe(MQTT_CONFIG.topics.messages);
+      mqttClient.subscribe(MQTT_CONFIG.topics.presence);
+      mqttClient.subscribe(MQTT_CONFIG.topics.delete);
+
+      sendPresenceHeartbeat();
+      setInterval(sendPresenceHeartbeat, 15000);
+      setInterval(cleanupInactiveUsers, 6000);
+    });
+
+    mqttClient.on('message', (topic, payload) => {
+      try {
+        const data = JSON.parse(payload.toString());
+        if (topic === MQTT_CONFIG.topics.messages) {
+          handleIncomingComment(data);
+        } else if (topic === MQTT_CONFIG.topics.presence) {
+          handleIncomingPresence(data);
+        } else if (topic === MQTT_CONFIG.topics.delete) {
+          handleIncomingCommentDelete(data);
+        }
+      } catch (err) {
+        console.error("Erro ao processar pacote MQTT:", err);
+      }
+    });
+
+    mqttClient.on('error', (err) => {
+      console.warn("Aviso MQTT:", err);
+    });
+  } catch (e) {
+    console.warn("Falha ao inicializar MQTT:", e);
+  }
+}
+
+function sendPresenceHeartbeat() {
+  if (!mqttClient || !mqttClient.connected) return;
+  const presenceData = {
+    clientId: CLIENT_ID,
+    name: state.user ? state.user.name : 'Visitante',
+    timestamp: Date.now()
+  };
+  mqttClient.publish(MQTT_CONFIG.topics.presence, JSON.stringify(presenceData));
+}
+
+function handleIncomingPresence(data) {
+  if (!data || !data.clientId) return;
+  onlineClientsMap.set(data.clientId, data.timestamp || Date.now());
+  updateOnlineUsersDisplay();
+}
+
+function cleanupInactiveUsers() {
+  const now = Date.now();
+  for (const [clientId, lastSeen] of onlineClientsMap.entries()) {
+    if (now - lastSeen > 35000) {
+      onlineClientsMap.delete(clientId);
+    }
+  }
+  updateOnlineUsersDisplay();
+}
+
+function updateOnlineUsersDisplay() {
+  const countEl = document.getElementById('onlineUsersCount');
+  if (!countEl) return;
+  const count = Math.max(1, onlineClientsMap.size);
+  countEl.innerText = `${count} online`;
+}
+
+function handleIncomingComment(comment) {
+  if (!comment || !comment.id) return;
+  if (commentsData.some(c => c.id === comment.id)) return;
+
+  commentsData.push(comment);
+  saveCommentsData();
+  renderCommentsList();
+
+  const box = document.getElementById('commentsBox');
+  if (box && box.classList.contains('hidden')) {
+    sounds.playBeep(880, 0.08, 'triangle');
+    const unreadDot = document.getElementById('commentsUnreadDot');
+    if (unreadDot) unreadDot.classList.remove('hidden');
+  }
+}
+
+function handleIncomingCommentDelete(data) {
+  if (!data || !data.id) return;
+  commentsData = commentsData.filter(c => c.id !== data.id);
+  saveCommentsData();
+  renderCommentsList();
+}
+
+// --- PROCESSAMENTO DE FOTO ESTILO PILLOW (CORTE CIRCULAR & COMPRESSÃO CANVAS) ---
+let tempPhotoData = {
+  login: null,
+  edit: null
+};
+
+function handlePhotoUpload(event, target) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    showToast("Por favor, selecione um arquivo de imagem válido.", "error");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const size = 120;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      // Corte quadrado 1:1 centralizado (estilo ImageOps.fit do Pillow)
+      const minDim = Math.min(img.width, img.height);
+      const sx = (img.width - minDim) / 2;
+      const sy = (img.height - minDim) / 2;
+      ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+      tempPhotoData[target] = compressedDataUrl;
+
+      const previewEl = document.getElementById(target === 'login' ? 'loginPhotoPreview' : 'editPhotoPreview');
+      const btnRemove = document.getElementById(target === 'login' ? 'btnLoginPhotoRemove' : 'btnEditPhotoRemove');
+      if (previewEl) {
+        previewEl.innerHTML = `<img src="${compressedDataUrl}" alt="Preview Foto">`;
+      }
+      if (btnRemove) btnRemove.classList.remove('hidden');
+      showToast("Foto recortada e otimizada estilo Pillow!", "info");
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearSelectedPhoto(target) {
+  tempPhotoData[target] = null;
+  const previewEl = document.getElementById(target === 'login' ? 'loginPhotoPreview' : 'editPhotoPreview');
+  const btnRemove = document.getElementById(target === 'login' ? 'btnLoginPhotoRemove' : 'btnEditPhotoRemove');
+  const fileInput = document.getElementById(target === 'login' ? 'loginPhotoFile' : 'editPhotoFile');
+  if (fileInput) fileInput.value = '';
+  if (previewEl) {
+    previewEl.innerHTML = `<span class="photo-placeholder-text">Sem Foto</span>`;
+  }
+  if (btnRemove) btnRemove.classList.add('hidden');
+}
+
+function selectQuickAvatar(type, target) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 120;
+  canvas.height = 120;
+  const ctx = canvas.getContext('2d');
+  
+  const bgColors = {
+    tiger: '#f59e0b',
+    crown: '#eab308',
+    rocket: '#8b5cf6',
+    ball: '#10b981',
+    pizza: '#ef4444',
+    uno: '#3b82f6'
+  };
+  const emojis = {
+    tiger: '🐯',
+    crown: '👑',
+    rocket: '🚀',
+    ball: '⚽',
+    pizza: '🍕',
+    uno: '🚗'
+  };
+
+  ctx.fillStyle = bgColors[type] || '#10b981';
+  ctx.fillRect(0, 0, 120, 120);
+  ctx.font = '64px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emojis[type] || '🐯', 60, 65);
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  tempPhotoData[target] = dataUrl;
+
+  const previewEl = document.getElementById(target === 'login' ? 'loginPhotoPreview' : 'editPhotoPreview');
+  const btnRemove = document.getElementById(target === 'login' ? 'btnLoginPhotoRemove' : 'btnEditPhotoRemove');
+  if (previewEl) {
+    previewEl.innerHTML = `<img src="${dataUrl}" alt="Avatar">`;
+  }
+  if (btnRemove) btnRemove.classList.remove('hidden');
+}
+
+function openChangePhotoModal() {
+  sounds.playClick();
+  const modal = document.getElementById('changePhotoModal');
+  if (!modal) return;
+  tempPhotoData.edit = state.user?.photo || null;
+  const previewEl = document.getElementById('editPhotoPreview');
+  const btnRemove = document.getElementById('btnEditPhotoRemove');
+  if (previewEl) {
+    if (state.user?.photo) {
+      previewEl.innerHTML = `<img src="${state.user.photo}" alt="Foto Atual">`;
+      if (btnRemove) btnRemove.classList.remove('hidden');
+    } else {
+      previewEl.innerHTML = `<span class="photo-placeholder-text">Sem Foto</span>`;
+      if (btnRemove) btnRemove.classList.add('hidden');
+    }
+  }
+  modal.classList.remove('hidden');
+}
+
+function closeChangePhotoModal() {
+  const modal = document.getElementById('changePhotoModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function saveEditedPhoto() {
+  sounds.playClick();
+  if (state.user) {
+    state.user.photo = tempPhotoData.edit;
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(state.user));
+    renderUserProfile();
+    renderCommentsList();
+    showToast("Foto de perfil salva com sucesso!", "success");
+  }
+  closeChangePhotoModal();
 }
 
 function renderCommentsList() {
@@ -314,9 +567,13 @@ function renderCommentsList() {
     const colorIndex = Math.abs(c.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length;
     const avatarBg = colors[colorIndex];
 
+    const avatarHtml = c.photo
+      ? `<div class="comment-avatar"><img src="${c.photo}" class="comment-avatar-img" alt="${c.name}"></div>`
+      : `<div class="comment-avatar" style="background-color: ${avatarBg}">${initials}</div>`;
+
     return `
       <div class="comment-message-item" id="comment-${c.id}">
-        <div class="comment-avatar" style="background-color: ${avatarBg}">${initials}</div>
+        ${avatarHtml}
         <div class="comment-bubble">
           <div class="comment-author-row">
             <span class="comment-author-name">${c.name}</span>
@@ -371,16 +628,22 @@ function handleSendComment(event) {
   const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
   const newComment = {
-    id: `c_${Date.now()}`,
+    id: `c_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     name: state.user.name, // APENAS O NOME, SEM GMAIL!
+    photo: state.user.photo || null,
     text: text,
     time: timeStr,
-    isAdm: !!state.isAdmin
+    isAdm: !!state.isAdmin,
+    timestamp: Date.now()
   };
 
   commentsData.push(newComment);
   saveCommentsData();
   renderCommentsList();
+
+  if (mqttClient && mqttClient.connected) {
+    mqttClient.publish(MQTT_CONFIG.topics.messages, JSON.stringify(newComment));
+  }
 
   input.value = '';
   sounds.playBeep(600, 0.05, 'triangle');
@@ -396,6 +659,11 @@ function deleteComment(commentId) {
       commentsData = commentsData.filter(c => c.id !== commentId);
       saveCommentsData();
       renderCommentsList();
+
+      if (mqttClient && mqttClient.connected) {
+        mqttClient.publish(MQTT_CONFIG.topics.delete, JSON.stringify({ id: commentId }));
+      }
+
       showToast("Comentário apagado com sucesso.", "info");
     },
     "Apagar",
@@ -403,7 +671,15 @@ function deleteComment(commentId) {
   );
 }
 
-// --- 4. SISTEMA DE LOGIN (NOME & GMAIL) ---
+// --- 4. SISTEMA DE LOGIN & CONTROLE ESTRITO DE ADMINISTRADOR ---
+const STRICT_ADMIN_EMAIL = 'mauricioboy14g@gmail.com';
+const STRICT_ADMIN_NAME = 'Maurício Boy';
+
+function isStrictAdmin(user) {
+  if (!user || !user.email) return false;
+  return user.email.toLowerCase().trim() === STRICT_ADMIN_EMAIL.toLowerCase();
+}
+
 function checkAuthStatus() {
   const authModal = document.getElementById('authModal');
   const userProfile = document.getElementById('userProfileCard');
@@ -411,17 +687,20 @@ function checkAuthStatus() {
   if (!state.user || !state.user.name || !state.user.email) {
     authModal.classList.remove('hidden');
     userProfile.classList.add('hidden');
+    state.isAdmin = false;
+    localStorage.setItem(STORAGE_KEYS.IS_ADMIN, 'false');
   } else {
     authModal.classList.add('hidden');
     userProfile.classList.remove('hidden');
     renderUserProfile();
     
-    // Auto-habilita ADM se o email ou nome for do Maurício/ADM
-    const emailLower = state.user.email.toLowerCase();
-    const nameLower = state.user.name.toLowerCase();
-    if (emailLower.includes('mauri') || nameLower.includes('mauri') || emailLower.includes('admin') || emailLower.includes('adm')) {
+    // Regra Estrita: Somente Maurício Boy com mauricioboy14g@gmail.com pode ser ADM
+    if (isStrictAdmin(state.user)) {
       state.isAdmin = true;
       localStorage.setItem(STORAGE_KEYS.IS_ADMIN, 'true');
+    } else {
+      state.isAdmin = false;
+      localStorage.setItem(STORAGE_KEYS.IS_ADMIN, 'false');
     }
   }
   updateAdmUI();
@@ -439,13 +718,25 @@ function updateAdmUI() {
     if (adminControlBar) adminControlBar.classList.remove('hidden');
   } else {
     if (adminBadge) adminBadge.classList.add('hidden');
-    if (btnOpenAdm) btnOpenAdm.classList.remove('hidden');
+    // Só exibe botão de pedir ADM se for a conta de Maurício
+    if (btnOpenAdm) {
+      if (isStrictAdmin(state.user)) {
+        btnOpenAdm.classList.remove('hidden');
+      } else {
+        btnOpenAdm.classList.add('hidden');
+      }
+    }
     if (adminControlBar) adminControlBar.classList.add('hidden');
   }
 }
 
 function openAdmModal() {
   sounds.playClick();
+  if (!state.user || !isStrictAdmin(state.user)) {
+    sounds.playLoss();
+    showToast("Acesso Negado: Apenas a conta Maurício Boy (mauricioboy14g@gmail.com) tem permissão de Administrador!", "error");
+    return;
+  }
   const modal = document.getElementById('admPinModal');
   if (modal) modal.classList.remove('hidden');
 }
@@ -457,22 +748,19 @@ function closeAdmModal() {
 
 function handleAdmPinSubmit(event) {
   event.preventDefault();
-  const pinInput = document.getElementById('admPinInput');
-  const pin = pinInput.value.trim().toLowerCase();
-
-  // Chaves de ADM permitidas
-  if (pin === '1234' || pin === 'kaiquebet' || pin === 'adm' || pin === 'admin') {
-    state.isAdmin = true;
-    localStorage.setItem(STORAGE_KEYS.IS_ADMIN, 'true');
-    sounds.playWin();
-    showToast("Acesso de Administrador concedido com sucesso!", "success");
-    closeAdmModal();
-    updateAdmUI();
-    renderBetsList();
-  } else {
+  if (!state.user || !isStrictAdmin(state.user)) {
     sounds.playLoss();
-    showToast("Chave de Administrador incorreta.", "error");
+    showToast("Acesso Negado: Apenas Maurício Boy pode acessar o painel de Administrador!", "error");
+    closeAdmModal();
+    return;
   }
+  state.isAdmin = true;
+  localStorage.setItem(STORAGE_KEYS.IS_ADMIN, 'true');
+  sounds.playWin();
+  showToast("Modo Administrador liberado para Maurício Boy!", "success");
+  closeAdmModal();
+  updateAdmUI();
+  renderBetsList();
 }
 
 function exitAdmMode() {
@@ -512,7 +800,6 @@ function handleLoginSubmit(event) {
     return;
   }
 
-  // Gera uma cor de destaque baseada no nome
   const colors = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'];
   const colorIndex = Math.abs(name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length;
   const avatarBg = colors[colorIndex];
@@ -521,6 +808,7 @@ function handleLoginSubmit(event) {
     name: name,
     email: email,
     avatarBg: avatarBg,
+    photo: tempPhotoData.login || null,
     loginAt: new Date().toISOString()
   };
 
@@ -538,7 +826,9 @@ function handleLogout() {
     () => {
       sounds.playClick();
       state.user = null;
+      state.isAdmin = false;
       localStorage.removeItem(STORAGE_KEYS.USER);
+      localStorage.setItem(STORAGE_KEYS.IS_ADMIN, 'false');
       showToast("Você saiu da sua conta.", "info");
       checkAuthStatus();
     },
@@ -553,14 +843,20 @@ function renderUserProfile() {
   const emailEl = document.getElementById('userEmailDisplay');
   const avatarEl = document.getElementById('userAvatar');
 
-  nameEl.innerText = state.user.name;
-  emailEl.innerText = state.user.email;
+  if (nameEl) nameEl.innerText = state.user.name;
+  if (emailEl) emailEl.innerText = state.user.email;
   
-  // Iniciais do nome
-  const initials = state.user.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
-  avatarEl.innerText = initials || 'K';
-  if (state.user.avatarBg) {
-    avatarEl.style.backgroundColor = state.user.avatarBg;
+  if (avatarEl) {
+    if (state.user.photo) {
+      avatarEl.innerHTML = `<img src="${state.user.photo}" class="header-avatar-img" alt="${state.user.name}">`;
+      avatarEl.style.backgroundColor = 'transparent';
+    } else {
+      const initials = state.user.name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
+      avatarEl.innerText = initials || 'K';
+      if (state.user.avatarBg) {
+        avatarEl.style.backgroundColor = state.user.avatarBg;
+      }
+    }
   }
 }
 
@@ -1409,6 +1705,514 @@ window.resetToInitial = function() {
   closeDepositModal();
 };
 
+// ==========================================================================
+// --- MINI GAME 1: CAMPO MINADO (MINES) ---
+// ==========================================================================
+let minesGame = {
+  running: false,
+  betAmount: 20,
+  bombCount: 3,
+  revealedCount: 0,
+  bombPositions: new Set(),
+  revealedTiles: new Set(),
+  currentMultiplier: 1.0
+};
+
+window.setMinesBet = function(amount) {
+  sounds.playClick();
+  const input = document.getElementById('minesBetInput');
+  if (input) input.value = amount;
+  updateMinesOddsPreview();
+};
+
+function calculateMinesMultiplier(bombs, revealed) {
+  let mult = 1.0;
+  for (let i = 0; i < revealed; i++) {
+    mult *= (25 - i) / (25 - bombs - i);
+  }
+  return Math.max(1.05, Math.round(mult * 0.96 * 100) / 100);
+}
+
+function updateMinesOddsPreview() {
+  const bombSelect = document.getElementById('minesBombCount');
+  const nextDisplay = document.getElementById('minesNextMultiDisplay');
+  if (!bombSelect || !nextDisplay) return;
+  const bombs = parseInt(bombSelect.value) || 3;
+  minesGame.bombCount = bombs;
+  const next = calculateMinesMultiplier(bombs, minesGame.revealedCount + 1);
+  nextDisplay.innerText = `${next.toFixed(2)}x`;
+}
+
+function startMinesGame() {
+  sounds.playClick();
+  if (minesGame.running) return;
+
+  const betInput = document.getElementById('minesBetInput');
+  const bombsSelect = document.getElementById('minesBombCount');
+  const bet = parseInt(betInput.value) || 0;
+  const bombs = parseInt(bombsSelect.value) || 3;
+
+  if (bet < 10) {
+    showToast("A aposta mínima no Campo Minado é KC$ 10.", "error");
+    return;
+  }
+  if (bet > state.balance) {
+    showToast("Saldo insuficiente para esta aposta!", "error");
+    return;
+  }
+
+  state.balance -= bet;
+  updateBalanceUI();
+
+  minesGame.running = true;
+  minesGame.betAmount = bet;
+  minesGame.bombCount = bombs;
+  minesGame.revealedCount = 0;
+  minesGame.currentMultiplier = 1.0;
+  minesGame.revealedTiles = new Set();
+  minesGame.bombPositions = new Set();
+
+  while (minesGame.bombPositions.size < bombs) {
+    const pos = Math.floor(Math.random() * 25);
+    minesGame.bombPositions.add(pos);
+  }
+
+  const btnStart = document.getElementById('btnStartMines');
+  const btnCashout = document.getElementById('btnCashoutMines');
+  if (btnStart) btnStart.classList.add('hidden');
+  if (btnCashout) {
+    btnCashout.classList.remove('hidden');
+    btnCashout.disabled = true;
+  }
+
+  document.getElementById('btnCashoutMinesText').innerText = `SACAR KC$ 0,00`;
+  document.getElementById('minesCurrentCashoutDisplay').innerText = `KC$ 0`;
+  document.getElementById('minesBoardStatus').innerText = `Clique nos quadrados para desviar das bombas!`;
+  document.getElementById('minesGemsCount').innerText = `0`;
+
+  updateMinesOddsPreview();
+  renderMinesGrid();
+  sounds.playBeep(520, 0.1, 'sine');
+}
+
+function renderMinesGrid() {
+  const grid = document.getElementById('minesGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  for (let i = 0; i < 25; i++) {
+    const tile = document.createElement('button');
+    tile.type = 'button';
+    tile.className = 'mine-tile';
+    tile.dataset.index = i;
+    tile.onclick = () => handleMineTileClick(i);
+    grid.appendChild(tile);
+  }
+}
+
+function handleMineTileClick(index) {
+  if (!minesGame.running) return;
+  if (minesGame.revealedTiles.has(index)) return;
+
+  const tile = document.querySelector(`.mine-tile[data-index="${index}"]`);
+  if (!tile) return;
+
+  if (minesGame.bombPositions.has(index)) {
+    // Explosão!
+    sounds.playLoss();
+    tile.classList.add('revealed-bomb');
+    tile.innerHTML = `💣`;
+    minesGame.running = false;
+    document.getElementById('minesBoardStatus').innerText = `💥 EXPLODIU! Aposta de KC$ ${minesGame.betAmount} perdida.`;
+
+    for (let i = 0; i < 25; i++) {
+      const t = document.querySelector(`.mine-tile[data-index="${i}"]`);
+      if (t) {
+        t.classList.add('disabled');
+        if (minesGame.bombPositions.has(i)) {
+          t.classList.add('revealed-bomb');
+          t.innerHTML = `💣`;
+        } else if (!minesGame.revealedTiles.has(i)) {
+          t.classList.add('unrevealed-dim');
+          t.innerHTML = `💎`;
+        }
+      }
+    }
+
+    addHistoryItem('Campo Minado', `${minesGame.bombCount} Bombas (Tile #${index + 1})`, minesGame.betAmount, 'loss');
+
+    document.getElementById('btnStartMines').classList.remove('hidden');
+    document.getElementById('btnCashoutMines').classList.add('hidden');
+    showToast("Você pisou numa bomba do Kaique!", "error");
+    return;
+  }
+
+  // Diamante seguro
+  sounds.playWin();
+  minesGame.revealedTiles.add(index);
+  minesGame.revealedCount++;
+  tile.classList.add('revealed-gem');
+  tile.innerHTML = `💎`;
+
+  const newMult = calculateMinesMultiplier(minesGame.bombCount, minesGame.revealedCount);
+  minesGame.currentMultiplier = newMult;
+  const currentPrize = Math.round(minesGame.betAmount * newMult);
+
+  document.getElementById('minesCurrentCashoutDisplay').innerText = `KC$ ${currentPrize.toLocaleString('pt-BR')}`;
+  document.getElementById('btnCashoutMinesText').innerText = `SACAR KC$ ${currentPrize.toLocaleString('pt-BR')} (${newMult.toFixed(2)}x)`;
+  document.getElementById('btnCashoutMines').disabled = false;
+  document.getElementById('minesGemsCount').innerText = `${minesGame.revealedCount}`;
+  document.getElementById('minesBoardStatus').innerText = `💎 Diamante encontrado! Prêmio: KC$ ${currentPrize.toLocaleString('pt-BR')} (${newMult.toFixed(2)}x)`;
+
+  updateMinesOddsPreview();
+}
+
+function cashoutMinesGame() {
+  if (!minesGame.running || minesGame.revealedCount === 0) return;
+  sounds.playWin();
+
+  const winAmount = Math.round(minesGame.betAmount * minesGame.currentMultiplier);
+  state.balance += winAmount;
+  updateBalanceUI();
+
+  minesGame.running = false;
+  document.getElementById('minesBoardStatus').innerText = `🎉 SACOU COM SUCESSO! Lucro de KC$ ${winAmount.toLocaleString('pt-BR')} (${minesGame.currentMultiplier.toFixed(2)}x)!`;
+
+  for (let i = 0; i < 25; i++) {
+    const t = document.querySelector(`.mine-tile[data-index="${i}"]`);
+    if (t && !minesGame.revealedTiles.has(i)) {
+      t.classList.add('disabled');
+      if (minesGame.bombPositions.has(i)) {
+        t.innerHTML = `💣`;
+        t.classList.add('unrevealed-dim');
+      } else {
+        t.innerHTML = `💎`;
+        t.classList.add('unrevealed-dim');
+      }
+    }
+  }
+
+  addHistoryItem('Campo Minado', `${minesGame.revealedCount} Diamantes (${minesGame.currentMultiplier.toFixed(2)}x)`, winAmount, 'win');
+
+  document.getElementById('btnStartMines').classList.remove('hidden');
+  document.getElementById('btnCashoutMines').classList.add('hidden');
+  showToast(`Você sacou KC$ ${winAmount.toLocaleString('pt-BR')}!`, "success");
+}
+
+// ==========================================================================
+// --- MINI GAME 2: PÊNALTI DOS CRIAS ---
+// ==========================================================================
+const PENALTI_ODDS = [1.85, 3.50, 6.80, 13.00, 25.00];
+
+let penaltiGame = {
+  running: false,
+  betAmount: 20,
+  currentStep: 0,
+  kicking: false
+};
+
+window.setPenaltiBet = function(amount) {
+  sounds.playClick();
+  const input = document.getElementById('penaltiBetInput');
+  if (input) input.value = amount;
+};
+
+function startPenaltiGame() {
+  sounds.playClick();
+  if (penaltiGame.running) return;
+
+  const betInput = document.getElementById('penaltiBetInput');
+  const bet = parseInt(betInput.value) || 0;
+
+  if (bet < 10) {
+    showToast("A aposta mínima no Pênalti é KC$ 10.", "error");
+    return;
+  }
+  if (bet > state.balance) {
+    showToast("Saldo insuficiente para esta aposta!", "error");
+    return;
+  }
+
+  state.balance -= bet;
+  updateBalanceUI();
+
+  penaltiGame.running = true;
+  penaltiGame.betAmount = bet;
+  penaltiGame.currentStep = 0;
+  penaltiGame.kicking = false;
+
+  document.querySelectorAll('.ladder-step').forEach(step => {
+    step.classList.remove('active', 'completed');
+  });
+  const firstStep = document.querySelector('.ladder-step[data-step="1"]');
+  if (firstStep) firstStep.classList.add('active');
+
+  resetPenaltiPositions();
+
+  document.getElementById('btnStartPenalti').classList.add('hidden');
+  document.getElementById('btnCashoutPenalti').classList.add('hidden');
+  document.getElementById('penaltiPitchBanner').innerText = "Escolha um canto na trave para chutar!";
+  enablePenaltiTargets(true);
+}
+
+function resetPenaltiPositions() {
+  const gk = document.getElementById('goalkeeperKaique');
+  const ball = document.getElementById('penaltyBall');
+  if (gk) {
+    gk.style.transform = 'translateX(-50%)';
+    gk.style.bottom = '28%';
+    gk.style.left = '50%';
+  }
+  if (ball) {
+    ball.style.transform = 'translateX(-50%)';
+    ball.style.bottom = '6%';
+    ball.style.left = '50%';
+  }
+}
+
+function enablePenaltiTargets(enable) {
+  document.querySelectorAll('.goal-target').forEach(btn => {
+    btn.disabled = !enable;
+  });
+}
+
+function kickPenalty(targetCorner) {
+  if (!penaltiGame.running || penaltiGame.kicking) return;
+  penaltiGame.kicking = true;
+  enablePenaltiTargets(false);
+
+  sounds.playBeep(400, 0.1, 'square');
+
+  const ball = document.getElementById('penaltyBall');
+  const gk = document.getElementById('goalkeeperKaique');
+  const banner = document.getElementById('penaltiPitchBanner');
+
+  const corners = ['top-left', 'top-right', 'center', 'bottom-left', 'bottom-right'];
+  const gkCorner = corners[Math.floor(Math.random() * corners.length)];
+
+  const targetCoords = {
+    'top-left': { left: '16%', bottom: '58%' },
+    'top-right': { left: '84%', bottom: '58%' },
+    'center': { left: '50%', bottom: '48%' },
+    'bottom-left': { left: '16%', bottom: '30%' },
+    'bottom-right': { left: '84%', bottom: '30%' }
+  };
+
+  const gkCoords = {
+    'top-left': { left: '26%', bottom: '45%' },
+    'top-right': { left: '74%', bottom: '45%' },
+    'center': { left: '50%', bottom: '30%' },
+    'bottom-left': { left: '26%', bottom: '26%' },
+    'bottom-right': { left: '74%', bottom: '26%' }
+  };
+
+  if (ball && targetCoords[targetCorner]) {
+    ball.style.left = targetCoords[targetCorner].left;
+    ball.style.bottom = targetCoords[targetCorner].bottom;
+    ball.style.transform = 'translateX(-50%) scale(0.65)';
+  }
+
+  if (gk && gkCoords[gkCorner]) {
+    gk.style.left = gkCoords[gkCorner].left;
+    gk.style.bottom = gkCoords[gkCorner].bottom;
+  }
+
+  setTimeout(() => {
+    const defended = (targetCorner === gkCorner);
+
+    if (defended) {
+      sounds.playLoss();
+      banner.innerText = "❌ DEFENDEU O KAIQUE! O paredão pegou no canto!";
+      penaltiGame.running = false;
+      penaltiGame.kicking = false;
+
+      addHistoryItem('Pênalti dos Crias', `Perdeu no Gol #${penaltiGame.currentStep + 1} (Defesa do Kaique)`, penaltiGame.betAmount, 'loss');
+
+      document.getElementById('btnStartPenalti').classList.remove('hidden');
+      document.getElementById('btnCashoutPenalti').classList.add('hidden');
+      showToast("O goleiro Kaique defendeu seu chute!", "error");
+    } else {
+      sounds.playWin();
+      penaltiGame.currentStep++;
+      const odd = PENALTI_ODDS[penaltiGame.currentStep - 1];
+      const currentPrize = Math.round(penaltiGame.betAmount * odd);
+
+      const curStepEl = document.querySelector(`.ladder-step[data-step="${penaltiGame.currentStep}"]`);
+      if (curStepEl) {
+        curStepEl.classList.remove('active');
+        curStepEl.classList.add('completed');
+      }
+      const nextStepEl = document.querySelector(`.ladder-step[data-step="${penaltiGame.currentStep + 1}"]`);
+      if (nextStepEl) {
+        nextStepEl.classList.add('active');
+      }
+
+      banner.innerText = `⚽ GOOOOOL! Gol ${penaltiGame.currentStep}/5 - Cotação: ${odd.toFixed(2)}x`;
+
+      if (penaltiGame.currentStep >= 5) {
+        banner.innerText = `🏆 GOLAÇO HISTÓRICO! Zerou a disputa de pênaltis!`;
+        cashoutPenaltiGame();
+      } else {
+        penaltiGame.kicking = false;
+        enablePenaltiTargets(true);
+        const btnCashout = document.getElementById('btnCashoutPenalti');
+        btnCashout.classList.remove('hidden');
+        document.getElementById('btnCashoutPenaltiText').innerText = `SACAR KC$ ${currentPrize.toLocaleString('pt-BR')} (${odd.toFixed(2)}x)`;
+        showToast(`Gooool! Prêmio atual: KC$ ${currentPrize.toLocaleString('pt-BR')}`, "success");
+        setTimeout(resetPenaltiPositions, 600);
+      }
+    }
+  }, 450);
+}
+
+function cashoutPenaltiGame() {
+  if (!penaltiGame.running || penaltiGame.currentStep === 0) return;
+  sounds.playWin();
+
+  const odd = PENALTI_ODDS[penaltiGame.currentStep - 1];
+  const winAmount = Math.round(penaltiGame.betAmount * odd);
+  state.balance += winAmount;
+  updateBalanceUI();
+
+  penaltiGame.running = false;
+  penaltiGame.kicking = false;
+  enablePenaltiTargets(false);
+
+  addHistoryItem('Pênalti dos Crias', `${penaltiGame.currentStep} Gols Marcados (${odd.toFixed(2)}x)`, winAmount, 'win');
+
+  document.getElementById('btnStartPenalti').classList.remove('hidden');
+  document.getElementById('btnCashoutPenalti').classList.add('hidden');
+  document.getElementById('penaltiPitchBanner').innerText = `🎉 Parabéns! Você faturou KC$ ${winAmount.toLocaleString('pt-BR')}!`;
+  showToast(`Prêmio resgatado: KC$ ${winAmount.toLocaleString('pt-BR')}!`, "success");
+  setTimeout(resetPenaltiPositions, 800);
+}
+
+// ==========================================================================
+// --- MINI GAME 3: DADOS DA SORTE ---
+// ==========================================================================
+let diceGame = {
+  mode: 'low',
+  odd: 2.0,
+  rolling: false,
+  recentRolls: [72, 18, 89, 44, 7]
+};
+
+window.setDiceBet = function(amount) {
+  sounds.playClick();
+  const input = document.getElementById('diceBetInput');
+  if (input) input.value = amount;
+};
+
+window.selectDiceMode = function(mode, odd) {
+  sounds.playClick();
+  diceGame.mode = mode;
+  diceGame.odd = odd;
+
+  document.querySelectorAll('.btn-dice-mode').forEach(btn => btn.classList.remove('active'));
+  const targetBtn = document.getElementById(
+    mode === 'low' ? 'btnDiceLow' :
+    mode === 'high' ? 'btnDiceHigh' :
+    mode === 'even' ? 'btnDiceEven' :
+    mode === 'odd' ? 'btnDiceOdd' : 'btnDiceLucky7'
+  );
+  if (targetBtn) targetBtn.classList.add('active');
+};
+
+function rollDiceGame() {
+  if (diceGame.rolling) return;
+  sounds.playClick();
+
+  const betInput = document.getElementById('diceBetInput');
+  const bet = parseInt(betInput.value) || 0;
+
+  if (bet < 10) {
+    showToast("A aposta mínima nos Dados é KC$ 10.", "error");
+    return;
+  }
+  if (bet > state.balance) {
+    showToast("Saldo insuficiente para esta aposta!", "error");
+    return;
+  }
+
+  state.balance -= bet;
+  updateBalanceUI();
+
+  diceGame.rolling = true;
+  const cube = document.querySelector('.dice-cube-container');
+  const numDisplay = document.getElementById('diceVisualNumber');
+  const subDisplay = document.getElementById('diceVisualSub');
+  const msgDisplay = document.getElementById('diceResultMessage');
+  const btnRoll = document.getElementById('btnRollDice');
+
+  if (cube) cube.classList.add('rolling');
+  if (btnRoll) btnRoll.disabled = true;
+  if (subDisplay) subDisplay.innerText = "Rolando...";
+  if (msgDisplay) msgDisplay.innerText = "Os dados estão girando na mesa...";
+
+  let rollCount = 0;
+  const rollInterval = setInterval(() => {
+    sounds.playBeep(300 + Math.random() * 300, 0.04, 'sine');
+    const tempNum = Math.floor(Math.random() * 100) + 1;
+    if (numDisplay) numDisplay.innerText = tempNum.toString().padStart(2, '0');
+    rollCount++;
+    if (rollCount >= 14) {
+      clearInterval(rollInterval);
+      finishDiceRoll(bet);
+    }
+  }, 80);
+}
+
+function finishDiceRoll(bet) {
+  const cube = document.querySelector('.dice-cube-container');
+  const numDisplay = document.getElementById('diceVisualNumber');
+  const subDisplay = document.getElementById('diceVisualSub');
+  const msgDisplay = document.getElementById('diceResultMessage');
+  const btnRoll = document.getElementById('btnRollDice');
+
+  const finalNumber = Math.floor(Math.random() * 100) + 1;
+  if (numDisplay) numDisplay.innerText = finalNumber.toString().padStart(2, '0');
+  if (cube) cube.classList.remove('rolling');
+  if (btnRoll) btnRoll.disabled = false;
+  diceGame.rolling = false;
+
+  diceGame.recentRolls.unshift(finalNumber);
+  if (diceGame.recentRolls.length > 5) diceGame.recentRolls.pop();
+  renderDiceRecentRolls();
+
+  let won = false;
+  if (diceGame.mode === 'low' && finalNumber < 50) won = true;
+  else if (diceGame.mode === 'high' && finalNumber > 50) won = true;
+  else if (diceGame.mode === 'even' && finalNumber % 2 === 0) won = true;
+  else if (diceGame.mode === 'odd' && finalNumber % 2 !== 0) won = true;
+  else if (diceGame.mode === 'lucky7' && (finalNumber === 7 || finalNumber === 77)) won = true;
+
+  if (won) {
+    sounds.playWin();
+    const prize = Math.round(bet * diceGame.odd);
+    state.balance += prize;
+    updateBalanceUI();
+
+    if (subDisplay) subDisplay.innerText = `Resultado: ${finalNumber} (Vitória!)`;
+    if (msgDisplay) msgDisplay.innerHTML = `<span style="color:#10b981;">🎉 DEU GREEN! Você faturou KC$ ${prize.toLocaleString('pt-BR')} (${diceGame.odd.toFixed(2)}x)!</span>`;
+    showToast(`Acertou! Ganhou KC$ ${prize.toLocaleString('pt-BR')}!`, "success");
+
+    addHistoryItem('Dados da Sorte', `Rolou ${finalNumber} (${diceGame.mode.toUpperCase()})`, prize, 'win');
+  } else {
+    sounds.playLoss();
+    if (subDisplay) subDisplay.innerText = `Resultado: ${finalNumber} (Derrota)`;
+    if (msgDisplay) msgDisplay.innerHTML = `<span style="color:#ef4444;">❌ DEU RED! O dado caiu em ${finalNumber}. Mais sorte na próxima!</span>`;
+    showToast("Não foi dessa vez! Tente novamente.", "error");
+
+    addHistoryItem('Dados da Sorte', `Rolou ${finalNumber} (${diceGame.mode.toUpperCase()})`, bet, 'loss');
+  }
+}
+
+function renderDiceRecentRolls() {
+  const container = document.getElementById('diceRecentRolls');
+  if (!container) return;
+  container.innerHTML = diceGame.recentRolls.map(n => `<span class="roll-chip">${n.toString().padStart(2, '0')}</span>`).join('');
+}
+
 // --- 11. INICIALIZAÇÃO & EVENT LISTENERS ---
 document.addEventListener('DOMContentLoaded', () => {
   checkAuthStatus();
@@ -1417,6 +2221,10 @@ document.addEventListener('DOMContentLoaded', () => {
   renderBetsList();
   renderCommentsList();
   initSlotReels();
+  initRealtimeOnline();
+  renderMinesGrid();
+  renderDiceRecentRolls();
+  updateMinesOddsPreview();
 
   // Comentários da Resenha
   const btnToggleComments = document.getElementById('btnToggleComments');
